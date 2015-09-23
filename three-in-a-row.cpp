@@ -11,6 +11,7 @@
 #include <netinet/in.h>
 #include <memory>
 #include <string.h>
+#include <string>
 #include <sys/time.h>
 #include <cstdint>
 #include <unistd.h>
@@ -26,7 +27,7 @@ pthread_mutex_t fdmutex = PTHREAD_MUTEX_INITIALIZER;
 pthread_mutex_t boardmutex = PTHREAD_MUTEX_INITIALIZER;
 
 uint16_t _PORT = 12000;
-int MAX_THREADS_NUM = 2;
+int MAX_THREADS_NUM = 3;
 int FD_OFFSET = 0;
 int MAX_ACCEPTABLE_CLIENT_MSG_LENGTH = 1000;
 
@@ -150,13 +151,73 @@ void show_board(int client_fd){
         pstr += "\n";
         server_write(client_fd, pstr.c_str(), strlen(pstr.c_str()));
     }
-    cols += "\n";
+    cols += "\n" + color_red;
     server_write(client_fd, cols.c_str(), strlen(cols.c_str()));
 }
+
+
+void broadcast_message(int client_fd, string message){
+    for(int c_fd = FD_OFFSET; c_fd < FD_OFFSET + MAX_THREADS_NUM; c_fd ++){
+        if((c_fd != client_fd) && FD_ISSET(c_fd, &threads_fd)){
+            string st = color_red + "From User " + to_string(client_fd) + ":\n" +
+                        message + "\n";
+            server_write(c_fd, st.c_str(), strlen(st.c_str()));
+        }
+    }
+}
+
+
+void print_all_boards(){
+    for(int c_fd = FD_OFFSET; c_fd < FD_OFFSET + MAX_THREADS_NUM; c_fd ++){
+        if(FD_ISSET(c_fd, &threads_fd)){
+            show_board(c_fd);
+        }
+    }
+}
+
+
+void place_piece(const int client_fd, string place){
+    auto i = place[1] - '1';
+    auto j = place[2] - 'a';
+    if(gameboard[i][j] == "\u25A1"){
+        pthread_mutex_lock(&boardmutex);
+        if(place[0] == 'o'){
+            gameboard[i][j] = "O";
+        }else{
+            gameboard[i][j] = "X";
+        }
+        pthread_mutex_unlock(&boardmutex);
+        string pstr = "Place a piece at " + place.substr(1);
+        cout << pstr << endl;
+        broadcast_message(client_fd, pstr);
+        print_all_boards();
+    }else{
+        string err_place = "Position filled. Try another one...\n";
+        server_write(client_fd, err_place.c_str(), strlen(err_place.c_str()));
+    }
+}
+
 
 void process_client_input(const int client_fd, const char *buf){
     if(buf[0] == '0')
         show_board(client_fd);
+    else if(buf[0] == '1'){
+        string resetgame= "Resetting game...\n";
+        broadcast_message(client_fd, resetgame);
+        newgame();
+        print_all_boards();
+    }else
+    // Handle recv when size of buf is larger than bytes received
+    if(sizeof(buf) >= 4 && (buf[0] == 'o' || buf[0] == 'x') &&
+      buf[1] >= '1' && buf[1] <= '5' && buf[2] >= 'a' && buf[2] <= 'e'){
+        string place = "";
+        for(int i = 0; i < 3; i ++)
+            place += buf[i];
+        place_piece(client_fd, place);
+    }else{
+        string invalid = "Invalid command...\n";
+        server_write(client_fd, invalid.c_str(), strlen(invalid.c_str()));
+    }
 }
 
 
@@ -165,7 +226,7 @@ void *client_command_handler(void *arg){
     int client_fd = *client_fd_ptr;
     char buf[MAX_ACCEPTABLE_CLIENT_MSG_LENGTH];
     while(true){
-        int read_bytes = recv(client_fd, buf, sizeof(buf), 0);
+        auto read_bytes = recv(client_fd, buf, sizeof(buf), 0);
         if(!read_bytes){
             cout << "Client disconnected...\nClearing client file descriptor "
                 << client_fd << endl;
@@ -186,8 +247,8 @@ void *client_command_handler(void *arg){
 void start_service(int server_fd){
     string info = "Commands:\n'0' to show the board\n'1' to reset game\n"
                   "Type board coordinates to place an piece. For example:\n"
-                  "'b1a' places a black piece at 1a, 'w2b' places a which "
-                  "piece at 2b\n";
+                  "'o1a' places a circle mark at 1a, 'x2b' places a cross "
+                  "mark at 2b\n";
     string color_info = color_red + info;
     pthread_t threads[MAX_THREADS_NUM];
     FD_ZERO(&threads_fd); // clear the file descriptor set
