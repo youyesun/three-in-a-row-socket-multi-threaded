@@ -16,7 +16,7 @@
 #include <cstdint>
 #include <unistd.h>
 
-
+//std::bind overlaps socket::bind in BSD Unix...
 using std::cout;
 using std::endl;
 using std::string;
@@ -25,6 +25,8 @@ using std::to_string;
 
 int BOARD_SIZE = 5;
 vector<vector<string>> gameboard;
+
+//BSD Unix doesn't support volatile in FD_ISSET 
 #if defined(__unix__) || (defined(__APPLE__) && defined(__MACH__))
 fd_set threads_fd;
 #else
