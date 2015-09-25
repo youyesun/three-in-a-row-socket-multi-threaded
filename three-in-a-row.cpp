@@ -17,12 +17,19 @@
 #include <unistd.h>
 
 
-using namespace std;
+using std::cout;
+using std::endl;
+using std::string;
+using std::vector;
+using std::to_string;
 
 int BOARD_SIZE = 5;
 vector<vector<string>> gameboard;
-
+#if defined(__unix__) || (defined(__APPLE__) && defined(__MACH__))
+fd_set threads_fd;
+#else
 volatile fd_set threads_fd;
+#endif
 pthread_mutex_t fdmutex = PTHREAD_MUTEX_INITIALIZER;
 pthread_mutex_t boardmutex = PTHREAD_MUTEX_INITIALIZER;
 
