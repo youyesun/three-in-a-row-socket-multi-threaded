@@ -1,7 +1,7 @@
 /*
  * C++ Three In A Row game
  * Socket, Multi-threaded
- * To complie: g++ -std=c++0x three-in-a-row.cpp -o three-in-a-row -pthread
+ * To complie: g++ -std=c++11 three-in-a-row.cpp -o three-in-a-row -pthread
  */
 
 #include <iostream>
